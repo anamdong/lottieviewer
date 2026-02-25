@@ -1,0 +1,1084 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Advanced Lottie / dotLottie Viewer (Alpha + Compat)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root { color-scheme: light dark; }
+    body{
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background:#111827; color:#e5e7eb;
+      display:flex; flex-direction:column; align-items:center;
+      padding:24px 12px 40px; margin:0; gap:16px;
+    }
+    h1{ font-size:1.4rem; margin:0; text-align:center; }
+    p.sub{ margin:0; font-size:0.9rem; color:#9ca3af; text-align:center; }
+
+    .layout{ display:flex; flex-wrap:wrap; gap:16px; justify-content:center; width:100%; max-width:1200px; }
+    .left-column,.right-column{ display:flex; flex-direction:column; gap:12px; min-width:280px; }
+    .left-column{ flex:1 1 320px; max-width:440px; }
+    .right-column{ flex:1 1 360px; max-width:680px; }
+
+    .card{
+      background:#020617;
+      border-radius:14px;
+      border:1px solid #1f2937;
+      padding:14px 14px 12px;
+      box-shadow:0 18px 45px rgba(15,23,42,0.6);
+    }
+    .card h2{ font-size:0.95rem; margin:0 0 8px; font-weight:600; color:#e5e7eb; }
+
+    #dropzone{
+      border:1.5px dashed #4b5563; border-radius:12px;
+      background:radial-gradient(circle at top, #111827 0, #020617 55%);
+      padding:18px 14px; display:flex; align-items:center; justify-content:center;
+      text-align:center; cursor:pointer;
+      transition:border-color 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
+      user-select:none;
+    }
+    #dropzone.hover{ border-color:#38bdf8; box-shadow:0 0 0 1px rgba(56,189,248,0.5); transform:translateY(-1px); }
+    #dropzone strong{ display:block; margin-bottom:4px; font-size:0.95rem; }
+    #dropzone span.hint{ display:block; font-size:0.8rem; color:#9ca3af; }
+    #status{ font-size:0.8rem; color:#9ca3af; min-height:1.1em; margin-top:6px; white-space:pre-line; }
+
+    #fontInfo,#compatInfo,#alphaInfo{ font-size:0.8rem; line-height:1.4; color:#d1d5db; white-space:pre-line; }
+
+    .badge{
+      display:inline-flex; align-items:center; gap:4px;
+      padding:2px 6px; border-radius:999px; font-size:0.7rem; margin-right:6px;
+    }
+    .badge-ok{ background:rgba(22,163,74,0.12); color:#bbf7d0; border:1px solid rgba(34,197,94,0.5); }
+    .badge-warn{ background:rgba(234,179,8,0.09); color:#facc15; border:1px solid rgba(234,179,8,0.6); }
+    .badge-info{ background:rgba(59,130,246,0.12); color:#bfdbfe; border:1px solid rgba(59,130,246,0.6); }
+
+    .controls-row{ display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:6px; }
+
+    button.icon-btn{
+      border-radius:999px; border:1px solid #374151;
+      background:#020617; color:#e5e7eb;
+      padding:4px 10px; font-size:0.8rem;
+      display:inline-flex; align-items:center; gap:4px;
+      cursor:pointer; user-select:none;
+      transition:background 0.12s ease, border-color 0.12s ease, transform 0.08s ease;
+    }
+    button.icon-btn:hover{ background:#111827; border-color:#4b5563; transform:translateY(-0.5px); }
+    button.icon-btn:active{ transform:translateY(0.3px) scale(0.99); }
+
+    .slider-group{ display:flex; flex-direction:column; gap:2px; flex:1; min-width:140px; }
+    .slider-label-row{ display:flex; justify-content:space-between; font-size:0.75rem; color:#9ca3af; }
+    input[type="range"]{ width:100%; }
+    .pill{ font-size:0.75rem; padding:1px 7px; border-radius:999px; border:1px solid #374151; color:#9ca3af; }
+
+    .hint-row{ font-size:0.75rem; color:#6b7280; display:flex; justify-content:space-between; gap:8px; flex-wrap:wrap; }
+    .hint-row span{ white-space:nowrap; }
+
+    #canvasOuter{
+      border-radius:14px; border:1px solid #1f2937; background:#020617;
+      padding:8px; box-shadow:inset 0 0 0 1px rgba(15,23,42,0.8);
+    }
+
+    /* Checkerboard base by default */
+    #canvasViewport{
+      position:relative;
+      width:100%;
+      max-width:600px;
+      max-height:450px;
+      aspect-ratio:4 / 3;
+      margin:0 auto;
+      border-radius:12px;
+      overflow:hidden;
+      cursor:grab;
+      touch-action:none;
+      background:
+        linear-gradient(45deg, rgba(255,255,255,0.10) 25%, transparent 25%, transparent 75%, rgba(255,255,255,0.10) 75%, rgba(255,255,255,0.10)) 0 0/18px 18px,
+        linear-gradient(45deg, rgba(255,255,255,0.10) 25%, transparent 25%, transparent 75%, rgba(255,255,255,0.10) 75%, rgba(255,255,255,0.10)) 9px 9px/18px 18px,
+        #0b1220;
+    }
+    #canvasViewport.dragging{ cursor:grabbing; }
+
+    /* Background layer sits above checkerboard, below canvas */
+    #bgLayer{
+      position:absolute; inset:0;
+      background-color:transparent;
+      background-repeat:no-repeat;
+      background-position:center center;
+      background-size:cover;
+      pointer-events:none;
+    }
+
+    #dotlottie-canvas{
+      position:relative;
+      width:100%; height:100%;
+      display:block;
+      transform-origin:center center;
+      image-rendering:auto;
+    }
+
+    .bg-tools{ display:flex; flex-direction:column; gap:8px; }
+    .row{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; font-size:0.8rem; color:#9ca3af; }
+    .row label{ display:flex; align-items:center; gap:8px; cursor:pointer; }
+    .row input[type="color"]{ width:28px; height:22px; padding:0; border-radius:999px; border:1px solid #4b5563; background:transparent; cursor:pointer; }
+    .row input[type="text"]{ background:#020617; border-radius:999px; border:1px solid #374151; padding:3px 8px; font-size:0.78rem; color:#e5e7eb; width:90px; }
+    select{ background:#020617; color:#e5e7eb; border-radius:999px; border:1px solid #374151; padding:4px 10px; font-size:0.8rem; cursor:pointer; }
+    input[type="file"]{ font-size:0.8rem; color:#9ca3af; }
+    .small{ font-size:0.75rem; color:#6b7280; }
+
+    @media (max-width:720px){ body{ padding-top:16px; } }
+  </style>
+</head>
+
+<body>
+  <h1>Advanced Lottie / dotLottie Viewer</h1>
+  <p class="sub">Drop a <strong>.json</strong> or <strong>.lottie</strong> file, inspect fonts/compat, and detect transparency.</p>
+
+  <div class="layout">
+    <div class="left-column">
+
+      <div class="card">
+        <h2>1. Load animation</h2>
+        <div id="dropzone" role="button" tabindex="0" aria-label="Load Lottie file">
+          <div>
+            <strong>Drop Lottie / dotLottie file here</strong>
+            <span class="hint">…or click to choose from your computer</span>
+          </div>
+        </div>
+        <div id="status"></div>
+      </div>
+
+      <div class="card">
+        <h2>2. Font inspection</h2>
+        <div id="fontInfo">
+          <span class="badge badge-info">ℹ font scan</span>
+          Drop a <strong>.json</strong> Lottie file to check whether it still uses live text layers (not converted to shapes).
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>3. Compatibility inspection</h2>
+        <div id="compatInfo">
+          <span class="badge badge-info">ℹ feature scan</span>
+          Drop a <strong>.json</strong> Lottie file to scan for features (expressions, 3D, effects, merge paths, masks, images…) that may behave differently across runtimes.
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>4. Transparency inspection</h2>
+        <div id="alphaInfo">
+          <span class="badge badge-info">ℹ alpha scan</span>
+          When playing, this samples the rendered canvas and reports whether any pixels are transparent.
+        </div>
+        <div class="controls-row" style="margin-top:10px;">
+          <label class="row" style="margin:0;">
+            <input type="checkbox" id="alphaScanToggle" checked />
+            <span>Enable alpha scan</span>
+          </label>
+          <div class="pill" id="alphaScanRate">Scan: 6 fps</div>
+        </div>
+        <div class="small">Note: heuristic scan of the rendered output (canvas).</div>
+      </div>
+
+      <div class="card">
+        <h2>5. Background, image & zoom</h2>
+        <div class="bg-tools">
+          <div class="row">
+            <label><input type="checkbox" id="bgColorEnabled" /><span>Use color background</span></label>
+            <input type="color" id="bgColor" value="#020617" />
+            <input type="text" id="bgColorHex" value="#020617" />
+            <button class="icon-btn" id="clearBgColorBtn" type="button">✕ Clear color</button>
+          </div>
+
+          <div class="row">
+            <span>Background image</span>
+            <input type="file" id="bgImageInput" accept="image/*" />
+            <button class="icon-btn" id="clearBgImageBtn" type="button">✕ Clear image</button>
+          </div>
+
+          <div class="row">
+            <span>Image fit</span>
+            <select id="bgImageFit">
+              <option value="cover" selected>Cover</option>
+              <option value="contain">Contain</option>
+              <option value="100% 100%">Stretch</option>
+            </select>
+            <span class="small">Checkerboard remains the base layer.</span>
+          </div>
+
+          <div class="controls-row">
+            <div class="slider-group">
+              <div class="slider-label-row">
+                <span>Zoom</span>
+                <span id="zoomLabel">100%</span>
+              </div>
+              <input type="range" id="zoomSlider" min="50" max="300" value="100" />
+            </div>
+            <button class="icon-btn" id="resetViewBtn" type="button">⤾ Reset view</button>
+          </div>
+
+          <div class="hint-row">
+            <span>🖱 drag in preview to pan</span>
+            <span>Checkerboard shows transparency by default</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="right-column">
+
+      <div class="card">
+        <h2>6. Playback controls</h2>
+        <div class="controls-row">
+          <button class="icon-btn" id="playBtn" type="button">▶ Play</button>
+          <button class="icon-btn" id="pauseBtn" type="button">⏸ Pause</button>
+          <button class="icon-btn" id="stopBtn" type="button">■ Stop</button>
+          <button class="icon-btn" id="stepBackBtn" type="button">⟲ -1 frame</button>
+          <button class="icon-btn" id="stepForwardBtn" type="button">⟳ +1 frame</button>
+        </div>
+
+        <div class="controls-row">
+          <div class="slider-group">
+            <div class="slider-label-row">
+              <span>Speed</span>
+              <span id="speedLabel">1.0x</span>
+            </div>
+            <input type="range" id="speedSlider" min="0.25" max="3" step="0.05" value="1" />
+          </div>
+          <div class="pill" id="frameLabel">Frame: –</div>
+        </div>
+        <div class="controls-row" style="margin-top:4px;">
+          <div class="pill" id="timeLabel">0:00 / 0:00</div>
+          <div class="slider-group" style="flex: 2; min-width: 240px;">
+            <div class="slider-label-row">
+              <span>Playhead</span>
+              <span id="durationHint">–</span>
+            </div>
+            <input type="range" id="timelineSlider" min="0" max="1" value="0" step="1" />
+          </div>
+          <div class="pill" id="frameCountLabel">– frames</div>
+        </div>
+        <div class="hint-row">
+          <span>Drag the playhead to seek</span>
+          <span>Tip: pause while scrubbing for precision</span>
+        </div>
+
+      </div>
+
+      <div class="card">
+        <h2>7. Preview</h2>
+        <div id="canvasOuter">
+          <div id="canvasViewport">
+            <div id="bgLayer"></div>
+            <canvas id="dotlottie-canvas"></canvas>
+          </div>
+        </div>
+        <div class="hint-row" style="margin-top:8px;">
+          <span>Tip: background controls do not modify the animation pixels.</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script type="module">
+    import { DotLottie } from "https://cdn.jsdelivr.net/npm/@lottiefiles/dotlottie-web/+esm";
+
+    const dropzone = document.getElementById("dropzone");
+    const statusEl = document.getElementById("status");
+    const fontInfoEl = document.getElementById("fontInfo");
+    const compatInfoEl = document.getElementById("compatInfo");
+    const alphaInfoEl = document.getElementById("alphaInfo");
+
+    const canvas = document.getElementById("dotlottie-canvas");
+    const canvasViewport = document.getElementById("canvasViewport");
+    const bgLayer = document.getElementById("bgLayer");
+
+    const bgColorEnabled = document.getElementById("bgColorEnabled");
+    const bgColorInput = document.getElementById("bgColor");
+    const bgColorHexInput = document.getElementById("bgColorHex");
+    const clearBgColorBtn = document.getElementById("clearBgColorBtn");
+
+    const bgImageInput = document.getElementById("bgImageInput");
+    const bgImageFit = document.getElementById("bgImageFit");
+    const clearBgImageBtn = document.getElementById("clearBgImageBtn");
+
+    const zoomSlider = document.getElementById("zoomSlider");
+    const zoomLabel = document.getElementById("zoomLabel");
+    const resetViewBtn = document.getElementById("resetViewBtn");
+
+    const playBtn = document.getElementById("playBtn");
+    const pauseBtn = document.getElementById("pauseBtn");
+    const stopBtn = document.getElementById("stopBtn");
+    const stepBackBtn = document.getElementById("stepBackBtn");
+    const stepForwardBtn = document.getElementById("stepForwardBtn");
+    const speedSlider = document.getElementById("speedSlider");
+    const speedLabel = document.getElementById("speedLabel");
+    const frameLabel = document.getElementById("frameLabel");
+
+    const timelineSlider = document.getElementById("timelineSlider");
+    const timeLabel = document.getElementById("timeLabel");
+    const frameCountLabel = document.getElementById("frameCountLabel");
+    const durationHint = document.getElementById("durationHint");
+
+
+    const alphaScanToggle = document.getElementById("alphaScanToggle");
+    const alphaScanRate = document.getElementById("alphaScanRate");
+
+    let dotLottieInstance = null;
+    let scanDotLottie = null; // offscreen renderer for accurate alpha scan in comp space
+    let currentFrame = 0;
+    let totalFrames = null;
+    let frameRate = null;
+    let isScrubbing = false;
+    let wasPlayingBeforeScrub = false;
+
+
+    let zoom = 1, panX = 0, panY = 0;
+    let isDragging = false, dragStartX = 0, dragStartY = 0, startPanX = 0, startPanY = 0;
+
+    let bgImageUrl = null;
+
+    let mainBlobUrl = null;
+    let scanBlobUrl = null;
+
+    const alphaState = {
+      everTransparent:false,
+      maxTransparentPct:0,
+      minAlphaEver:255,
+      topGapMax:0,
+      bottomGapMax:0,
+      lastScanMs:0,
+      scanIntervalMs:166
+    };
+    // Animation native (comp) dimensions for transparency scanning.
+    // For .json we read these from the uploaded file (w/h).
+    // For .lottie we try to infer from the DotLottie instance if possible; otherwise we fall back to the rendered canvas size.
+    let compW = null;
+    let compH = null;
+
+    // Offscreen buffer to resample the rendered canvas into comp space for alpha scanning.
+    const scanCanvas = document.createElement("canvas");
+    const scanCtx = scanCanvas.getContext("2d", { willReadFrequently: true });
+
+    // Offscreen canvas that renders the animation at native comp size (no letterboxing).
+    const scanRenderCanvas = document.createElement("canvas");
+
+
+    alphaScanRate.textContent = "Scan: " + Math.round(1000 / alphaState.scanIntervalMs) + " fps";
+
+    function setStatus(text, isError=false){
+      statusEl.textContent = text || "";
+      statusEl.style.color = isError ? "#fecaca" : "#9ca3af";
+    }
+
+    function updateFrameLabel(){
+      frameLabel.textContent = "Frame: " + (Number.isFinite(currentFrame) ? Math.round(currentFrame) : "–");
+    }
+
+    
+    function formatTime(seconds){
+      const s = Math.max(0, Math.floor(seconds));
+      const m = Math.floor(s / 60);
+      const r = s % 60;
+      return m + ":" + String(r).padStart(2, "0");
+    }
+
+    function computeTimingFromData(maybeData){
+      // maybeData: Lottie JSON-like object with fr/ip/op
+      try{
+        if (maybeData && typeof maybeData.fr === "number") frameRate = maybeData.fr;
+        if (maybeData && typeof maybeData.ip === "number" && typeof maybeData.op === "number"){
+          const frames = Math.max(1, Math.round(maybeData.op - maybeData.ip));
+          totalFrames = frames;
+        }
+      } catch(_){}
+    }
+
+    function updateTimelineUI(){
+      if (!timelineSlider) return;
+
+      const tf = (typeof totalFrames === "number" && totalFrames > 0) ? totalFrames : null;
+      const fr = (typeof frameRate === "number" && frameRate > 0) ? frameRate : 30;
+
+      if (tf){
+        timelineSlider.max = String(Math.max(0, tf - 1));
+        frameCountLabel.textContent = tf + " frames";
+        const durSec = tf / fr;
+        durationHint.textContent = "Duration ~" + formatTime(durSec);
+        const curSec = (currentFrame || 0) / fr;
+        timeLabel.textContent = formatTime(curSec) + " / " + formatTime(durSec);
+      } else {
+        timelineSlider.max = "1";
+        frameCountLabel.textContent = "– frames";
+        durationHint.textContent = "–";
+        timeLabel.textContent = "0:00 / 0:00";
+      }
+
+      if (!isScrubbing){
+        const v = Math.max(0, Math.round(currentFrame || 0));
+        timelineSlider.value = String(v);
+      }
+    }
+function updateZoomUI(){
+      zoomLabel.textContent = Math.round(zoom*100) + "%";
+      canvas.style.transform = "translate(" + panX + "px, " + panY + "px) scale(" + zoom + ")";
+    }
+
+    function resetView(){
+      zoom = 1; panX = 0; panY = 0;
+      zoomSlider.value = "100";
+      updateZoomUI();
+    }
+
+    function normalizeHex(value){
+      let v = (value || "").trim();
+      if (!v) return null;
+      if (!v.startsWith("#") && /^([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(v)) v = "#" + v;
+      if (/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(v)) return v;
+      return null;
+    }
+
+    function applyBackground(){
+      bgLayer.style.backgroundColor = bgColorEnabled.checked ? bgColorInput.value : "transparent";
+      if (bgImageUrl){
+        bgLayer.style.backgroundImage = `url("${bgImageUrl}")`;
+        bgLayer.style.backgroundSize = bgImageFit.value;
+      } else {
+        bgLayer.style.backgroundImage = "none";
+      }
+
+    async function ensureScanRenderer(srcUrl){
+      // Only possible when we know comp size and have a valid source URL.
+      if (!(typeof compW === "number" && compW > 0 && typeof compH === "number" && compH > 0)) {
+        scanDotLottie = null;
+        return;
+      }
+      try{
+        scanRenderCanvas.width = compW;
+        scanRenderCanvas.height = compH;
+
+        if (!scanDotLottie){
+          scanDotLottie = new DotLottie({
+            canvas: scanRenderCanvas,
+            src: srcUrl,
+            loop: false,
+            autoplay: false,
+            renderConfig: { autoResize: false, devicePixelRatio: 1 }
+          });
+        } else {
+          // Load the same animation into the scan renderer
+          await scanDotLottie.load({ src: srcUrl, autoplay: false, loop: false });
+        }
+      } catch(e){
+        console.error("Scan renderer failed:", e);
+        scanDotLottie = null;
+      }
+    }
+    }
+
+    // ---------- Font scan ----------
+    function analyzeFontsFromJson(json){
+      const fonts = [];
+      if (json && json.fonts && Array.isArray(json.fonts.list)){
+        for (const entry of json.fonts.list){
+          const name = entry.fFamily || entry.fName || entry.family || entry.name;
+          if (name && !fonts.includes(name)) fonts.push(name);
+        }
+      }
+      const textLayers = [];
+      function scanLayers(layers){
+        if (!Array.isArray(layers)) return;
+        for (const layer of layers){
+          if (!layer || typeof layer !== "object") continue;
+          if (layer.ty === 5) textLayers.push(layer);
+          if (Array.isArray(layer.layers)) scanLayers(layer.layers);
+        }
+      }
+      if (Array.isArray(json.layers)) scanLayers(json.layers);
+      if (Array.isArray(json.assets)) for (const asset of json.assets) if (asset && Array.isArray(asset.layers)) scanLayers(asset.layers);
+      return { hasTextLayers:textLayers.length>0, fonts, error:null };
+    }
+
+    function setFontInfoForJsonAnalysis(result){
+      const { hasTextLayers, fonts, error } = result;
+      if (error){
+        fontInfoEl.innerHTML = '<span class="badge badge-warn">⚠ font scan</span>' +
+          "Could not parse this JSON for font analysis.\nIs it a valid Bodymovin export?";
+        return;
+      }
+      if (!hasTextLayers){
+        fontInfoEl.innerHTML = '<span class="badge badge-ok">✓ safe for environments without fonts</span>' +
+          "No live text layers detected.\nThis usually means your text has been converted to shapes.\n" +
+          (fonts.length ? ("\nEmbedded font metadata: " + fonts.join(", ")) : "");
+      } else {
+        fontInfoEl.innerHTML = '<span class="badge badge-warn">⚠ live text found</span>' +
+          "This animation still has live text layers that rely on runtime fonts.\nSome environments may render differently or fail.\n\n" +
+          (fonts.length ? ("Fonts referenced: " + fonts.join(", ")) : "No explicit font list metadata found, but text layers are present.");
+      }
+    }
+
+    function setFontInfoForDotLottie(){
+      fontInfoEl.innerHTML = '<span class="badge badge-info">ℹ note</span>' +
+        "Font inspection is implemented for <strong>.json</strong> exports.\nExport as JSON for precise font diagnostics.";
+    }
+
+    // ---------- Compatibility scan ----------
+    function analyzeCompatibilityFromJson(json){
+      const flags = { hasExpressions:false, has3D:false, hasEffects:false, hasMasks:false, hasTrackMattes:false, hasBlendModes:false, hasTimeStretch:false, hasTimeRemap:false, usesImageAssets:false, usesMergePaths:false, usesGradients:false };
+
+      function scanObjectForExpressions(obj){
+        if (!obj || typeof obj !== "object") return;
+        if (typeof obj.x === "string" && obj.x.trim() !== "") flags.hasExpressions = true;
+        for (const key in obj){
+          const val = obj[key];
+          if (val && typeof val === "object") scanObjectForExpressions(val);
+        }
+      }
+
+      function scanShapes(arr){
+        if (!Array.isArray(arr)) return;
+        for (const sh of arr){
+          if (!sh || typeof sh !== "object") continue;
+          if (typeof sh.mn === "string" && sh.mn.includes("ADBE Vector Filter - Merge")) flags.usesMergePaths = true;
+          if ((sh.t === "st" || sh.ty === "st" || sh.t === "fl" || sh.ty === "fl") && sh.g) flags.usesGradients = true;
+          if (Array.isArray(sh.it)) scanShapes(sh.it);
+          scanObjectForExpressions(sh);
+        }
+      }
+
+      function scanLayers(layers){
+        if (!Array.isArray(layers)) return;
+        for (const layer of layers){
+          if (!layer || typeof layer !== "object") continue;
+          if (layer.ddd === 1) flags.has3D = true;
+          if (Array.isArray(layer.ef) && layer.ef.length) flags.hasEffects = true;
+          if (Array.isArray(layer.masksProperties) && layer.masksProperties.length) flags.hasMasks = true;
+          if (layer.tt != null && layer.tt !== 0) flags.hasTrackMattes = true;
+          if (typeof layer.bm === "number" && layer.bm !== 0) flags.hasBlendModes = true;
+          if (typeof layer.stretch === "number" && layer.stretch !== 100) flags.hasTimeStretch = true;
+          if (layer.tm != null) flags.hasTimeRemap = true;
+
+          if (Array.isArray(layer.shapes)) scanShapes(layer.shapes);
+          if (Array.isArray(layer.layers)) scanLayers(layer.layers);
+          scanObjectForExpressions(layer);
+        }
+      }
+
+      if (Array.isArray(json.layers)) scanLayers(json.layers);
+      if (Array.isArray(json.assets)){
+        for (const asset of json.assets){
+          if (!asset || typeof asset !== "object") continue;
+          if (Array.isArray(asset.layers)) scanLayers(asset.layers);
+          if (asset.p && typeof asset.p === "string") flags.usesImageAssets = true;
+        }
+      }
+
+      scanObjectForExpressions(json);
+      return flags;
+    }
+
+    function setCompatInfoForJsonAnalysis(flags, errored=false){
+      if (errored){
+        compatInfoEl.innerHTML = '<span class="badge badge-warn">⚠ feature scan</span>' +
+          "Could not parse this JSON for compatibility analysis.\nIf this is a dotLottie container, export as JSON for deeper inspection.";
+        return;
+      }
+      const warnings = [];
+      if (flags.hasExpressions) warnings.push("• Uses <strong>expressions</strong>. Many runtimes ignore these.");
+      if (flags.has3D) warnings.push("• Uses <strong>3D layers</strong>. Some players flatten/drop 3D.");
+      if (flags.hasEffects) warnings.push("• Uses <strong>layer effects</strong> (blur, glow...). Often unsupported.");
+      if (flags.usesMergePaths) warnings.push("• Uses <strong>Merge Paths</strong>. Older/native players may drop shapes.");
+      if (flags.hasMasks) warnings.push("• Uses <strong>masks</strong>. Complex masks can differ by renderer.");
+      if (flags.hasTrackMattes) warnings.push("• Uses <strong>track mattes</strong>. Missing support can hide layers.");
+      if (flags.hasBlendModes) warnings.push("• Uses <strong>blend modes</strong> other than Normal.");
+      if (flags.usesGradients) warnings.push("• Uses <strong>gradient strokes/fills</strong>. Some runtimes differ.");
+      if (flags.usesImageAssets) warnings.push("• References <strong>image assets</strong>. Missing assets can disappear.");
+      if (flags.hasTimeStretch || flags.hasTimeRemap) warnings.push("• Uses <strong>time-stretch / time-remap</strong>. Some players ignore.");
+
+      if (!warnings.length){
+        compatInfoEl.innerHTML = '<span class="badge badge-ok">✓ basic feature set</span>' +
+          "No common portability red flags detected.";
+      } else {
+        compatInfoEl.innerHTML = '<span class="badge badge-warn">⚠ potential cross-environment issues</span>\n' +
+          warnings.join("\n") +
+          "\n\n" +
+          '<span class="badge badge-info">Tip</span>' +
+          " If elements disappear, bake effects, avoid 3D/expressions, simplify mattes/merge paths, then re-export.";
+      }
+    }
+
+    function setCompatInfoForDotLottie(){
+      compatInfoEl.innerHTML = '<span class="badge badge-info">ℹ limited scan</span>' +
+        "This is a <strong>.lottie</strong> container.\nDeep feature scanning is optimized for JSON.\nExport as JSON for deeper inspection.";
+    }
+
+    function analyzeJsonFileForInsights(file){
+      const reader = new FileReader();
+      reader.onload = () => {
+        try{
+          const json = JSON.parse(reader.result);
+
+          // Capture native comp size for alpha scanning
+          if (typeof json.w === "number" && typeof json.h === "number") {
+            compW = json.w;
+            compH = json.h;
+          } else {
+            compW = null;
+            compH = null;
+          }
+
+          setFontInfoForJsonAnalysis(analyzeFontsFromJson(json));
+          setCompatInfoForJsonAnalysis(analyzeCompatibilityFromJson(json), false);
+        } catch (e){
+          console.error(e);
+          setFontInfoForJsonAnalysis({hasTextLayers:false, fonts:[], error:true});
+          setCompatInfoForJsonAnalysis(null, true);
+        }
+      };
+      reader.onerror = () => {
+        setFontInfoForJsonAnalysis({hasTextLayers:false, fonts:[], error:true});
+        setCompatInfoForJsonAnalysis(null, true);
+      };
+      reader.readAsText(file);
+    }
+
+    // ---------- Alpha scan ----------
+    function resetAlphaState(){
+      alphaState.everTransparent=false;
+      alphaState.maxTransparentPct=0;
+      alphaState.minAlphaEver=255;
+      alphaState.topGapMax=0;
+      alphaState.bottomGapMax=0;
+      alphaState.lastScanMs=0;
+      alphaInfoEl.innerHTML =
+        '<span class="badge badge-info">ℹ alpha scan</span>' +
+        "Scanning will start once the animation renders frames.\n" +
+        "It checks for truly transparent holes (alpha ≤ 10) and also reports non-opaque pixels (alpha < 250).";
+    }
+
+    function setAlphaInfo(ok, lines){
+      const badge = ok
+        ? '<span class="badge badge-ok">✓ no transparency detected (so far)</span>'
+        : '<span class="badge badge-warn">⚠ transparency detected</span>';
+      alphaInfoEl.innerHTML = badge + "\n" + lines.join("\n");
+    }
+
+    function scanAlphaNow(){
+      if (!alphaScanToggle.checked) return;
+
+      const now = performance.now();
+      if (now - alphaState.lastScanMs < alphaState.scanIntervalMs) return;
+      alphaState.lastScanMs = now;
+
+      // Prefer the offscreen comp-sized renderer when available (avoids letterboxing inside the preview canvas).
+      const sourceCanvas = scanDotLottie ? scanRenderCanvas : canvas;
+
+      const w = sourceCanvas.width, h = sourceCanvas.height;
+      if (!w || !h) return;
+
+      // If we have a scan renderer, keep it in sync with the main player's frame (best-effort).
+      if (scanDotLottie){
+        try{
+          scanDotLottie.setFrame(currentFrame);
+        } catch(_){ /* ignore */ }
+      }
+
+      // If we're sampling the preview canvas but we know comp size, resample into comp space as before.
+      const targetW = (sourceCanvas === canvas && typeof compW === "number" && compW > 0) ? compW : w;
+      const targetH = (sourceCanvas === canvas && typeof compH === "number" && compH > 0) ? compH : h;
+
+      scanCanvas.width = targetW;
+      scanCanvas.height = targetH;
+      if (!scanCtx) return;
+
+      scanCtx.clearRect(0, 0, targetW, targetH);
+      scanCtx.drawImage(sourceCanvas, 0, 0, w, h, 0, 0, targetW, targetH);
+
+      const step = Math.max(2, Math.floor(Math.min(targetW, targetH)/160));
+
+      // Two thresholds:
+      // - "transparent": truly see-through (alpha <= 10) for holes/missing background
+      // - "non-opaque": alpha < 250 catches semi-transparent pixels (glows, antialias)
+      const transparentThreshold = 10;
+      const nonOpaqueThreshold = 250;
+
+      const img = scanCtx.getImageData(0, 0, targetW, targetH).data;
+      const alphaAt = (x,y) => img[(y*targetW + x)*4 + 3];
+
+      let transparent=0, nonOpaque=0, total=0, minAlpha=255;
+      for (let y=0;y<targetH;y+=step){
+        for (let x=0;x<targetW;x+=step){
+          const a = alphaAt(x,y);
+          total++;
+          if (a <= transparentThreshold) transparent++;
+          if (a < nonOpaqueThreshold) nonOpaque++;
+          if (a < minAlpha) minAlpha = a;
+        }
+      }
+
+      const transparentPct = total ? (transparent/total)*100 : 0;
+      const nonOpaquePct = total ? (nonOpaque/total)*100 : 0;
+
+      // Edge gap estimation should be based on "transparent" (not semi-transparent)
+      const rowTransparentPct = (y) => {
+        let t=0,n=0;
+        for (let x=0;x<targetW;x+=step){ n++; if (alphaAt(x,y) <= transparentThreshold) t++; }
+        return n ? (t/n) : 0;
+      };
+
+      let topGap=0;
+      for (let y=0;y<targetH;y+=step){ if (rowTransparentPct(y) > 0.98) topGap += step; else break; }
+      let bottomGap=0;
+      for (let y=targetH-1;y>=0;y-=step){ if (rowTransparentPct(y) > 0.98) bottomGap += step; else break; }
+
+      if (transparent > 0) alphaState.everTransparent = true;
+      if (transparentPct > alphaState.maxTransparentPct) alphaState.maxTransparentPct = transparentPct;
+      if (minAlpha < alphaState.minAlphaEver) alphaState.minAlphaEver = minAlpha;
+      if (topGap > alphaState.topGapMax) alphaState.topGapMax = topGap;
+      if (bottomGap > alphaState.bottomGapMax) alphaState.bottomGapMax = bottomGap;
+
+      const ok = !alphaState.everTransparent;
+
+      const sourceLabel = scanDotLottie
+        ? `Scan source: comp renderer (${compW}×${compH})`
+        : ( (targetW === compW && targetH === compH) ? `Scan source: preview (resampled to comp ${targetW}×${targetH})` : `Scan source: preview (${targetW}×${targetH})`);
+
+      const lines = [];
+      lines.push(sourceLabel);
+      // Normalize current transparency against the maximum observed in this session (max becomes 100%).
+      const denom = (alphaState.maxTransparentPct > 0) ? alphaState.maxTransparentPct : transparentPct;
+      const normalizedPct = (denom > 0) ? Math.min(100, (transparentPct / denom) * 100) : 0;
+
+      lines.push(`Transparency (normalized, max=100%): ${normalizedPct.toFixed(2)}%`);
+if (alphaState.topGapMax > 0 || alphaState.bottomGapMax > 0){
+        lines.push("");
+        lines.push("Edge gaps (fully transparent rows):");
+        if (alphaState.topGapMax > 0) lines.push("• Top gap up to ~" + alphaState.topGapMax + " px");
+        if (alphaState.bottomGapMax > 0) lines.push("• Bottom gap up to ~" + alphaState.bottomGapMax + " px");
+        lines.push("This can indicate a background layer that doesn't cover the comp on some frames.");
+      } else if (!ok){
+        lines.push("");
+        lines.push("Transparency exists somewhere in the frame. Use the checkerboard/background image to spot where.");
+      }
+
+      setAlphaInfo(ok, lines);
+    }
+
+    // ---------- Loading ----------
+    async function loadAnimationFromFile(file){
+      const ext = (file.name.split(".").pop() || "").toLowerCase();
+      if (!["json","lottie"].includes(ext)){
+        setStatus("Unsupported file type. Please use a .json or .lottie file.", true);
+        return;
+      }
+
+      // Revoke previous blob URLs (avoid leaking)
+      try{ if (mainBlobUrl) URL.revokeObjectURL(mainBlobUrl); } catch(_){ }
+      try{ if (scanBlobUrl) URL.revokeObjectURL(scanBlobUrl); } catch(_){ }
+      mainBlobUrl = URL.createObjectURL(file);
+      // Use a separate URL for the scan renderer to avoid any runtime quirks with shared blob URLs
+      scanBlobUrl = URL.createObjectURL(file);
+
+      setStatus("Loading " + file.name + " …");
+
+      resetAlphaState();
+
+      if (ext === "json") analyzeJsonFileForInsights(file);
+      else { compW = null; compH = null; setFontInfoForDotLottie(); setCompatInfoForDotLottie(); }
+
+
+      // For accurate transparency scanning we want the native comp size early.
+      if (ext === "json"){
+        try{
+          const txt = await file.text();
+          const j = JSON.parse(txt);
+          computeTimingFromData(j);
+          if (typeof j.w === "number" && typeof j.h === "number"){ compW = j.w; compH = j.h; }
+        } catch(_){ /* ignore */ }
+      }
+
+      try{
+        if (!dotLottieInstance){
+          dotLottieInstance = new DotLottie({
+            canvas,
+            src:mainBlobUrl,
+            loop:true,
+            autoplay:true,
+            renderConfig:{ autoResize:true, devicePixelRatio: window.devicePixelRatio || 1 }
+          });
+
+          dotLottieInstance.addEventListener("frame", ({ currentFrame: cf }) => {
+            currentFrame = cf;
+            updateFrameLabel();
+            updateTimelineUI();
+            scanAlphaNow();
+          });
+        } else {
+          await dotLottieInstance.load({ src:mainBlobUrl, autoplay:true, loop:true });
+        }
+
+        // Best-effort: infer comp size from the DotLottie instance when possible (for .lottie)
+        try{
+          const maybeData =
+            (typeof dotLottieInstance.getLottie === "function" ? dotLottieInstance.getLottie() : null) ||
+            (dotLottieInstance.lottie || null) ||
+            (dotLottieInstance.animationData || null) ||
+            (dotLottieInstance._animationData || null);
+          computeTimingFromData(maybeData);
+          if (maybeData && typeof maybeData.w === "number" && typeof maybeData.h === "number"){
+            compW = maybeData.w;
+            compH = maybeData.h;
+          }
+        } catch(_){ /* ignore */ }
+
+      resetView();
+        updateTimelineUI();
+        setStatus("Playing: " + file.name);
+      } catch (e){
+        console.error(e);
+        setStatus("Failed to load animation. Check that the file is a valid Lottie / dotLottie file.", true);
+        return;
+      }
+
+      // Alpha scan renderer is optional. If it fails, the preview can still be correct.
+      try{
+        // Now that we may know comp size, try to enable the offscreen scan renderer
+        await ensureScanRenderer(scanBlobUrl);
+      } catch (e){
+        console.warn("Alpha scan renderer failed:", e);
+        alphaInfoEl.innerHTML =
+          '<span class="badge badge-warn">⚠ alpha scan</span>' +
+          "Preview is playing, but comp-accurate alpha scanning could not be enabled.\n" +
+          "Falling back to preview-based scanning.\n" +
+          "Tip: if this happens consistently, try running from a local server.";
+      }
+    }
+
+    // ---------- Dropzone interactions (same pattern as your working version) ----------
+    dropzone.addEventListener("dragover", (e) => { e.preventDefault(); dropzone.classList.add("hover"); });
+    dropzone.addEventListener("dragleave", () => dropzone.classList.remove("hover"));
+    dropzone.addEventListener("drop", (e) => {
+      e.preventDefault(); dropzone.classList.remove("hover");
+      const file = e.dataTransfer.files && e.dataTransfer.files[0];
+      if (file) loadAnimationFromFile(file);
+    });
+
+    function openPicker(){
+      const input = document.createElement("input");
+      input.type = "file";
+      input.accept = ".json,.lottie";
+      input.addEventListener("change", (e) => {
+        const file = e.target.files && e.target.files[0];
+        if (file) loadAnimationFromFile(file);
+      });
+      input.click();
+    }
+
+    dropzone.addEventListener("click", openPicker);
+    dropzone.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openPicker(); }
+    });
+
+    // Prevent browser from navigating away when dropping file outside the dropzone
+    window.addEventListener("dragover", (e) => e.preventDefault());
+    window.addEventListener("drop", (e) => e.preventDefault());
+
+    // ---------- Playback ----------
+    playBtn.addEventListener("click", () => dotLottieInstance && dotLottieInstance.play());
+    pauseBtn.addEventListener("click", () => dotLottieInstance && dotLottieInstance.pause());
+    stopBtn.addEventListener("click", () => dotLottieInstance && dotLottieInstance.stop());
+
+    stepBackBtn.addEventListener("click", () => {
+      if (!dotLottieInstance) return;
+      const target = Math.max(0, currentFrame - 1);
+      dotLottieInstance.setFrame(target);
+      currentFrame = target;
+      updateFrameLabel();
+      scanAlphaNow();
+    });
+
+    stepForwardBtn.addEventListener("click", () => {
+      if (!dotLottieInstance) return;
+      const target = currentFrame + 1;
+      dotLottieInstance.setFrame(target);
+      currentFrame = target;
+      updateFrameLabel();
+      scanAlphaNow();
+    });
+
+    speedSlider.addEventListener("input", () => {
+      const speed = parseFloat(speedSlider.value);
+      speedLabel.textContent = speed.toFixed(2).replace(/\.00$/, "") + "x";
+      if (dotLottieInstance && Number.isFinite(speed) && speed > 0) dotLottieInstance.setSpeed(speed);
+    });
+
+    
+    // ---------- Timeline / seeking ----------
+    function seekToFrame(frame){
+      const f = Math.max(0, Math.round(frame || 0));
+      currentFrame = f;
+      updateFrameLabel();
+      updateTimelineUI();
+      try{
+        if (dotLottieInstance && typeof dotLottieInstance.setFrame === "function"){
+          dotLottieInstance.setFrame(f);
+        }
+      } catch(_){}
+      // Also keep the scan renderer in sync (best-effort)
+      try{
+        if (scanDotLottie && typeof scanDotLottie.setFrame === "function"){
+          scanDotLottie.setFrame(f);
+        }
+      } catch(_){}
+      scanAlphaNow();
+    }
+
+    // Detect whether the player is currently playing (best-effort across versions)
+    function isMainPlaying(){
+      try{
+        if (dotLottieInstance && typeof dotLottieInstance.isPlaying === "boolean") return dotLottieInstance.isPlaying;
+        if (dotLottieInstance && typeof dotLottieInstance.getState === "function"){
+          const st = dotLottieInstance.getState();
+          return st === "playing";
+        }
+      } catch(_){}
+      return false;
+    }
+
+    if (timelineSlider){
+      const beginScrub = () => {
+        if (isScrubbing) return;
+        isScrubbing = true;
+        wasPlayingBeforeScrub = isMainPlaying();
+        try{ dotLottieInstance && dotLottieInstance.pause && dotLottieInstance.pause(); } catch(_){}
+      };
+      const endScrub = () => {
+        if (!isScrubbing) return;
+        isScrubbing = false;
+        // Snap to current slider value
+        seekToFrame(parseInt(timelineSlider.value, 10));
+        if (wasPlayingBeforeScrub){
+          try{ dotLottieInstance && dotLottieInstance.play && dotLottieInstance.play(); } catch(_){}
+        }
+        updateTimelineUI();
+      };
+
+      timelineSlider.addEventListener("pointerdown", beginScrub);
+      timelineSlider.addEventListener("mousedown", beginScrub);
+      timelineSlider.addEventListener("touchstart", beginScrub, { passive:true });
+
+      timelineSlider.addEventListener("input", () => {
+        // While scrubbing, update labels immediately (without resuming play)
+        const f = parseInt(timelineSlider.value, 10);
+        currentFrame = f;
+        updateFrameLabel();
+        updateTimelineUI();
+        try{
+          if (dotLottieInstance && typeof dotLottieInstance.setFrame === "function"){
+            dotLottieInstance.setFrame(f);
+          }
+        } catch(_){}
+      });
+
+      timelineSlider.addEventListener("change", endScrub);
+      timelineSlider.addEventListener("pointerup", endScrub);
+      timelineSlider.addEventListener("mouseup", endScrub);
+      timelineSlider.addEventListener("touchend", endScrub);
+      timelineSlider.addEventListener("touchcancel", endScrub);
+    }
+// ---------- Background controls ----------
+    bgColorInput.addEventListener("input", () => {
+      bgColorHexInput.value = bgColorInput.value;
+      bgColorEnabled.checked = true;
+      applyBackground();
+    });
+
+    bgColorHexInput.addEventListener("change", () => {
+      const normalized = normalizeHex(bgColorHexInput.value);
+      if (normalized){
+        bgColorInput.value = normalized;
+        bgColorEnabled.checked = true;
+        applyBackground();
+      } else {
+        bgColorHexInput.value = bgColorInput.value;
+      }
+    });
+
+    bgColorEnabled.addEventListener("change", applyBackground);
+    clearBgColorBtn.addEventListener("click", () => { bgColorEnabled.checked = false; applyBackground(); });
+
+    bgImageFit.addEventListener("change", applyBackground);
+
+    bgImageInput.addEventListener("change", (e) => {
+      const f = e.target.files && e.target.files[0];
+      if (!f) return;
+      if (bgImageUrl) URL.revokeObjectURL(bgImageUrl);
+      bgImageUrl = URL.createObjectURL(f);
+      applyBackground();
+      bgImageInput.value = "";
+    });
+
+    clearBgImageBtn.addEventListener("click", () => {
+      if (bgImageUrl) URL.revokeObjectURL(bgImageUrl);
+      bgImageUrl = null;
+      applyBackground();
+    });
+
+    // ---------- Zoom & pan ----------
+    zoomSlider.addEventListener("input", () => { zoom = parseInt(zoomSlider.value, 10)/100; updateZoomUI(); });
+    resetViewBtn.addEventListener("click", resetView);
+
+    function onPointerDown(e){
+      isDragging = true;
+      canvasViewport.classList.add("dragging");
+      dragStartX = e.clientX; dragStartY = e.clientY;
+      startPanX = panX; startPanY = panY;
+    }
+    function onPointerMove(e){
+      if (!isDragging) return;
+      panX = startPanX + (e.clientX - dragStartX);
+      panY = startPanY + (e.clientY - dragStartY);
+      updateZoomUI();
+    }
+    function onPointerUp(){
+      isDragging = false;
+      canvasViewport.classList.remove("dragging");
+    }
+
+    canvasViewport.addEventListener("mousedown", onPointerDown);
+    window.addEventListener("mousemove", onPointerMove);
+    window.addEventListener("mouseup", onPointerUp);
+
+    canvasViewport.addEventListener("touchstart", (e) => {
+      const t = e.touches[0]; if (!t) return;
+      onPointerDown(t);
+    }, { passive:true });
+
+    canvasViewport.addEventListener("touchmove", (e) => {
+      const t = e.touches[0]; if (!t) return;
+      onPointerMove(t);
+    }, { passive:true });
+
+    canvasViewport.addEventListener("touchend", onPointerUp);
+    canvasViewport.addEventListener("touchcancel", onPointerUp);
+
+    // ---------- Alpha scan toggle ----------
+    alphaScanToggle.addEventListener("change", () => {
+      if (alphaScanToggle.checked) resetAlphaState();
+      else alphaInfoEl.innerHTML = '<span class="badge badge-info">ℹ alpha scan</span>Alpha scan is disabled.';
+    });
+
+    // Init
+    resetView();
+    applyBackground();
+    resetAlphaState();
+    updateTimelineUI();
+    setStatus("Ready. Drop or click to load a file.");
+  </script>
+
+  <footer style="margin-top:18px; color:#6b7280; font-size:0.8rem; text-align:center; width:100%; max-width:1200px;">
+    © 2026 James Ishikawa
+  </footer>
+
+</body>
+</html>
